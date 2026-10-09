@@ -1,5 +1,5 @@
 // Меняйте версию при каждом обновлении сайта, чтобы телефон скачал свежие файлы
-const CACHE = 'levelup-v3';
+const CACHE = 'levelup-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
