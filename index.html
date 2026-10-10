@@ -153,8 +153,7 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
       <input id="dt" placeholder="Название задания" maxlength="80">
       <div class="hint">Дни недели</div>
       <div class="row" id="dd"></div>
-      <div class="hint">Какие характеристики растут (+1 за каждую)</div>
-      <div class="row" id="ds"></div>
+      <div class="hint">Награда: +5 Опыт</div>
       <button class="btn" id="dadd">Добавить</button>
     </div>
     <div class="box" id="dl"></div>
@@ -174,7 +173,7 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
 <script>
 const SEC={quest:'Сюжетные квесты',work:'Работа',study:'Учёба',park:'Паркур/Акробатика',gym:'Закачка'};
 const ST={str:'Сила',agi:'Ловкость',end:'Выносливость',int:'Интеллект',elo:'Красноречие',per:'Восприятие'};
-const R={quest:{xp:10,int:1,per:1},work:{xp:10,elo:2,int:1,per:1},study:{xp:10,int:2,elo:1,per:1},park:{xp:10,agi:2,str:1,end:1,per:1},gym:{str:1,end:1}};
+const R={quest:{xp:10},work:{xp:10,elo:2,int:1,per:1},study:{xp:10,int:2,elo:1,per:1},park:{xp:10,agi:2,str:1,end:1,per:1},gym:{str:1,end:1}};
 const WD=[[1,'Пн'],[2,'Вт'],[3,'Ср'],[4,'Чт'],[5,'Пт'],[6,'Сб'],[0,'Вс']];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -206,18 +205,19 @@ applyTheme(S.theme);
 function toast(msg,bad){const e=document.createElement('div');e.className='toast'+(bad?' bad':'');e.innerHTML='<b>[Уведомление]</b>'+esc(msg);$('#toasts').appendChild(e);setTimeout(()=>e.remove(),4200)}
 function addXp(n){S.xp+=n;while(S.xp>=need(S.lv)){S.xp-=need(S.lv);S.lv++;toast('Уровень повышен: '+S.lv)}}
 function penalty(why,src,n){if(!S.pool.length)return null;const t=S.pool[Math.floor(Math.random()*S.pool.length)];S.tasks.push({id:uid(),type:'pen',title:t,why,src,n:n||1});return t}
-function rewardText(sec,m){const r=R[sec],o=[];for(const k in r){const v=Math.floor(r[k]*(m||1));if(v>0)o.push('+'+v+' '+(k==='xp'?'Опыт':ST[k]))}return o.join(', ')||'без награды'}
+const rw=x=>{const r={...R[x.sec]};if(x.sec==='quest')(x.stats||[]).forEach(k=>{if(k in ST)r[k]=(r[k]||0)+1});return r};
+function rewardText(sec,m){const r=typeof sec==='string'?R[sec]:sec,o=[];for(const k in r){const v=Math.floor(r[k]*(m||1));if(v>0)o.push('+'+v+' '+(k==='xp'?'Опыт':ST[k]))}return o.join(', ')||'без награды'}
 
 function check(){
   const t=today();let d=new Date(S.last+'T00:00:00');let lost=0,pens=0;
   while(ds(d)<t){const k=ds(d);
     const miss=S.tasks.filter(x=>x.type==='daily'&&x.days.includes(d.getDay())&&k>=x.created&&!x.done.includes(k));
-    miss.forEach(x=>x.stats.forEach(s=>{if(S.st[s]>0){S.st[s]--;lost++}}));
+    miss.forEach(()=>{const l=Math.min(S.xp,5);S.xp-=l;lost+=l});
     if(miss.length&&penalty('daily',miss.map(x=>x.title).join('», «'),miss.length))pens++;
     d.setDate(d.getDate()+1)}
   S.last=t;
   S.tasks.filter(x=>x.type==='once'&&!x.done&&x.due&&x.due<t&&!x.missed).forEach(x=>{x.missed=true;if(penalty('once',x.title))pens++;toast('Срок задания «'+x.title+'» истёк. Награда уменьшена.',1)});
-  if(lost)toast('Пропущены ежедневные задания. Потеряно очков: '+lost,1);
+  if(lost)toast('Пропущены ежедневные задания. Потеряно опыта: '+lost,1);
   if(pens)toast('Назначено штрафных заданий: '+pens,1);
   save();
 }
@@ -230,15 +230,15 @@ function render(){
   const dl=S.tasks.filter(x=>x.type==='daily');
   $('#dl').innerHTML='<span class="cap">[ Ежедневное ]</span>'+(dl.length?dl.map(x=>{
     const done=x.done.includes(t),on=x.days.includes(dow);
-    return '<div class="item'+(done?' done':'')+(on?'':' off')+'"><button class="ck" data-act="dd" data-id="'+x.id+'"'+(done||!on?' disabled':'')+'>'+(done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br>'+WD.filter(w=>x.days.includes(w[0])).map(w=>'<span class="tag">'+w[1]+'</span>').join('')+x.stats.map(s=>'<span class="tag">+1 '+ST[s]+'</span>').join('')+(on?'':'<span class="tag">сегодня не по расписанию</span>')+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">Ежедневных заданий пока нет. Создайте первое выше.</div>');
+    return '<div class="item'+(done?' done':'')+(on?'':' off')+'"><button class="ck" data-act="dd" data-id="'+x.id+'"'+(done||!on?' disabled':'')+'>'+(done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br>'+WD.filter(w=>x.days.includes(w[0])).map(w=>'<span class="tag">'+w[1]+'</span>').join('')+'<span class="tag">+5 Опыт</span>'+(on?'':'<span class="tag">сегодня не по расписанию</span>')+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">Ежедневных заданий пока нет. Создайте первое выше.</div>');
   for(const sec in SEC){
     const l=S.tasks.filter(x=>x.type==='once'&&x.sec===sec).sort((a,b)=>a.done-b.done);
     $('#ol-'+sec).innerHTML='<span class="cap">[ '+SEC[sec]+' ]</span>'+(l.length?l.map(x=>{
       const over=!x.done&&x.due&&x.due<t;
-      return '<div class="item'+(x.done?' done':'')+'"><button class="ck" data-act="od" data-id="'+x.id+'"'+(x.done?' disabled':'')+'>'+(x.done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br><span class="tag">'+rewardText(x.sec,x.missed?.5:1)+'</span>'+(x.due?'<span class="tag'+(over?' bad':'')+'">до '+x.due.split('-').reverse().join('.')+(over?' · просрочено':'')+'</span>':'')+(x.subs.map((s,i)=>'<div class="sub'+(s.d?' done':'')+'"><button data-act="sub" data-id="'+x.id+'" data-i="'+i+'">'+(s.d?'✓':'')+'</button><span>'+esc(s.t)+'</span></div>').join(''))+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">В этом разделе пока нет заданий. Добавьте первое выше.</div>');
+      return '<div class="item'+(x.done?' done':'')+'"><button class="ck" data-act="od" data-id="'+x.id+'"'+(x.done?' disabled':'')+'>'+(x.done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br><span class="tag">'+rewardText(rw(x),x.missed?.5:1)+'</span>'+(x.due?'<span class="tag'+(over?' bad':'')+'">до '+x.due.split('-').reverse().join('.')+(over?' · просрочено':'')+'</span>':'')+(x.subs.map((s,i)=>'<div class="sub'+(s.d?' done':'')+'"><button data-act="sub" data-id="'+x.id+'" data-i="'+i+'">'+(s.d?'✓':'')+'</button><span>'+esc(s.t)+'</span></div>').join(''))+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">В этом разделе пока нет заданий. Добавьте первое выше.</div>');
   }
   const pl=S.tasks.filter(x=>x.type==='pen');
-  $('#pool').innerHTML=S.pool.length?S.pool.map((p,i)=>'<div class="item"><div class="t">'+esc(p)+'</div><button class="x" data-act="pdel" data-i="'+i+'" aria-label="Удалить">✕</button></div>').join(''):'<div class="empty">Список пуст: за пропуск будут сниматься очки характеристик.</div>';
+  $('#pool').innerHTML=S.pool.length?S.pool.map((p,i)=>'<div class="item"><div class="t">'+esc(p)+'</div><button class="x" data-act="pdel" data-i="'+i+'" aria-label="Удалить">✕</button></div>').join(''):'<div class="empty">Список пуст: за пропуск будет сниматься опыт.</div>';
   const cur=pl[0],m=$('#modal');
   if(cur){
     if(m.dataset.id!==cur.id){m.dataset.id=cur.id;$('#pdone').checked=false;$('#pok').disabled=true}
@@ -260,8 +260,7 @@ function render(){
 
 // формы
 $('#dd').innerHTML=WD.map(w=>'<button type="button" class="chip on" data-d="'+w[0]+'">'+w[1]+'</button>').join('');
-$('#ds').innerHTML=Object.keys(ST).map(k=>'<button type="button" class="chip" data-s="'+k+'">'+ST[k]+'</button>').join('');
-$('#secTabs').innerHTML=Object.keys(SEC).map(k=>'<div class="tab" id="tab-s-'+k+'"><div class="box"><span class="cap">[ Новое задание ]</span><div class="hint">Награда: '+rewardText(k)+'</div><input class="ot" placeholder="Название задания" maxlength="100"><label class="hint">Срок (необязательно)</label><input class="od" type="date"><textarea class="osub" rows="2" placeholder="Подзадачи, по одной в строке (необязательно)"></textarea><button class="btn" data-act="oadd" data-sec="'+k+'">Добавить</button></div><div class="box" id="ol-'+k+'"></div></div>').join('');
+$('#secTabs').innerHTML=Object.keys(SEC).map(k=>'<div class="tab" id="tab-s-'+k+'"><div class="box"><span class="cap">[ Новое задание ]</span><div class="hint">Награда: '+rewardText(k)+'</div>'+(k==='quest'?'<div class="hint">Характеристики за этот квест (необязательно)</div><div class="row">'+Object.keys(ST).map(q=>'<button type="button" class="chip sc" data-s="'+q+'">'+ST[q]+'</button>').join('')+'</div>':'')+'<input class="ot" placeholder="Название задания" maxlength="100"><label class="hint">Срок (необязательно)</label><input class="od" type="date"><textarea class="osub" rows="2" placeholder="Подзадачи, по одной в строке (необязательно)"></textarea><button class="btn" data-act="oadd" data-sec="'+k+'">Добавить</button></div><div class="box" id="ol-'+k+'"></div></div>').join('');
 $('#nav').insertAdjacentHTML('beforeend','');
 const pb=document.querySelector('[data-tab=pen]');
 Object.keys(SEC).forEach(k=>pb.insertAdjacentHTML('beforebegin','<button data-tab="s-'+k+'">'+(k==='quest'?'Сюжет&shy;ные квесты':SEC[k].replace('/','/<wbr>'))+'<span class="cnt" data-c="'+k+'"></span></button>'));
@@ -269,10 +268,8 @@ Object.keys(SEC).forEach(k=>pb.insertAdjacentHTML('beforebegin','<button data-ta
 $('#dadd').onclick=()=>{
   const title=$('#dt').value.trim();if(!title)return toast('Введите название задания',1);
   const days=[...document.querySelectorAll('#dd .on')].map(b=>+b.dataset.d);
-  const stats=[...document.querySelectorAll('#ds .on')].map(b=>b.dataset.s);
   if(!days.length)return toast('Выберите хотя бы один день',1);
-  if(!stats.length)return toast('Выберите хотя бы одну характеристику',1);
-  S.tasks.push({id:uid(),type:'daily',title,days,stats,done:[],created:today()});
+  S.tasks.push({id:uid(),type:'daily',title,days,stats:[],done:[],created:today()});
   $('#dt').value='';render();
 };
 $('#pdone').onchange=e=>{$('#pok').disabled=!e.target.checked};
@@ -287,10 +284,10 @@ document.addEventListener('click',e=>{
   const a=b.dataset.act,x=S.tasks.find(y=>y.id===b.dataset.id);
   if(a==='oadd'){const box=b.closest('.tab'),title=box.querySelector('.ot').value.trim();if(!title)return toast('Введите название задания',1);
     const subs=box.querySelector('.osub').value.split('\n').map(v=>v.trim()).filter(Boolean).map(t=>({t,d:false}));
-    S.tasks.push({id:uid(),type:'once',sec:b.dataset.sec,title,due:box.querySelector('.od').value||'',subs,done:false,missed:false});
-    box.querySelector('.ot').value='';box.querySelector('.od').value='';box.querySelector('.osub').value=''}
-  if(a==='dd'&&x){x.done.push(today());x.stats.forEach(s=>S.st[s]++);toast('Задание выполнено: '+x.stats.map(s=>'+1 '+ST[s]).join(', '))}
-  if(a==='od'&&x){const r=R[x.sec],m=x.missed?.5:1;for(const k in r){const v=Math.floor(r[k]*m);if(!v)continue;if(k==='xp')addXp(v);else S.st[k]+=v}x.done=true;toast('Задание выполнено: '+rewardText(x.sec,m))}
+    S.tasks.push({id:uid(),type:'once',sec:b.dataset.sec,title,due:box.querySelector('.od').value||'',subs,done:false,missed:false,stats:b.dataset.sec==='quest'?[...box.querySelectorAll('.sc.on')].map(c=>c.dataset.s):[]});
+    box.querySelector('.ot').value='';box.querySelector('.od').value='';box.querySelector('.osub').value='';box.querySelectorAll('.sc.on').forEach(c=>c.classList.remove('on'))}
+  if(a==='dd'&&x){x.done.push(today());addXp(5);toast('Задание выполнено: +5 Опыт')}
+  if(a==='od'&&x){const r=rw(x),m=x.missed?.5:1;for(const k in r){const v=Math.floor(r[k]*m);if(!v)continue;if(k==='xp')addXp(v);else S.st[k]+=v}x.done=true;toast('Задание выполнено: '+rewardText(r,m))}
   if(a==='sub'&&x){x.subs[+b.dataset.i].d=!x.subs[+b.dataset.i].d}
   if(a==='pd'&&x){S.tasks=S.tasks.filter(y=>y!==x);toast('Штраф отработан')}
   if(a==='del'&&x)S.tasks=S.tasks.filter(y=>y!==x);
@@ -352,7 +349,7 @@ function clean(d){
   for(const k in ST)o.st[k]=n(d.st[k]);
   d.tasks.forEach(x=>{if(!x||typeof x!=='object')return;const id=str(x.id,20)||uid();
     if(x.type==='daily')o.tasks.push({id,type:'daily',title:str(x.title,80),days:(Array.isArray(x.days)?x.days:[]).map(Number).filter(v=>v>=0&&v<=6),stats:(Array.isArray(x.stats)?x.stats:[]).filter(k=>typeof k==='string'&&k in ST),done:(Array.isArray(x.done)?x.done:[]).filter(dt),created:dt(x.created)||today()});
-    else if(x.type==='once'&&typeof x.sec==='string'&&x.sec in SEC)o.tasks.push({id,type:'once',sec:x.sec,title:str(x.title,100),due:dt(x.due),subs:(Array.isArray(x.subs)?x.subs:[]).map(q=>({t:str(q&&q.t,100),d:!!(q&&q.d)})),done:!!x.done,missed:!!x.missed});
+    else if(x.type==='once'&&typeof x.sec==='string'&&x.sec in SEC)o.tasks.push({id,type:'once',sec:x.sec,title:str(x.title,100),due:dt(x.due),subs:(Array.isArray(x.subs)?x.subs:[]).map(q=>({t:str(q&&q.t,100),d:!!(q&&q.d)})),done:!!x.done,missed:!!x.missed,stats:(x.sec==='quest'&&Array.isArray(x.stats))?x.stats.filter(k=>typeof k==='string'&&k in ST):[]});
     else if(x.type==='pen')o.tasks.push({id,type:'pen',title:str(x.title,80),why:str(x.why,10),src:str(x.src,200),n:n(x.n)||1});
   });
   return o;
