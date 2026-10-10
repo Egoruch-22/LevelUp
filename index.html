@@ -118,6 +118,7 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
       <textarea id="dta" rows="6" readonly></textarea>
       <div class="row"><button class="btn" id="dcopy">Копировать код</button><button class="btn" id="ddl">Скачать файл</button></div>
     </div>
+    <div id="dar"><div class="hint" id="arc"></div><div id="arl"></div><div class="row"><button id="armore">Показать ещё</button><button id="arclr">Очистить архив</button></div></div>
     <div id="dth"><div class="hint">Выберите основной цвет приложения.</div><div class="themes" id="tgrid"></div></div>
     <div id="dim">
       <div class="hint">Вставьте код сохранения или выберите файл. Текущие данные будут заменены.</div>
@@ -135,7 +136,7 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
 </div>
 <main>
   <div class="menu"><button id="mbtn" aria-haspopup="true" aria-expanded="false" aria-label="Системные функции">⋮</button>
-    <div id="mlist" hidden><button data-m="th">Тема</button><button data-m="ex">Экспорт данных</button><button data-m="im">Импорт данных</button></div></div>
+    <div id="mlist" hidden><button data-m="th">Тема</button><button data-m="ar">Архив</button><button data-m="ex">Экспорт данных</button><button data-m="im">Импорт данных</button></div></div>
   <h1>Level Up</h1>
   <section class="box"><span class="cap"><input id="pname" aria-label="Имя" placeholder="Имя" maxlength="24" autocomplete="off"></span>
     <div class="top"><div class="lv" id="lv">1</div><div><div>Уровень</div><small id="xpt"></small></div></div>
@@ -186,6 +187,12 @@ let S,remindOpen=false;
 try{S=JSON.parse(localStorage.getItem('sistema-v1'))}catch(e){}
 if(!S||!S.st)S={xp:0,lv:1,st:{str:0,agi:0,per:0,int:0,elo:0,end:0},tasks:[],pool:[],last:today()};
 for(const k in ST)if(typeof S.st[k]!=='number')S.st[k]=0;
+function archiveDone(){
+  if(!Array.isArray(S.archive))S.archive=[];
+  S.tasks=S.tasks.filter(x=>{if(x.type==='once'&&x.done){S.archive.unshift({s:x.sec,t:x.title});return false}return true});
+  if(S.archive.length>1000)S.archive.length=1000;
+}
+archiveDone();
 const save=()=>{try{localStorage.setItem('sistema-v1',JSON.stringify(S))}catch(e){}};
 const THEMES={
  green:{n:'Зелёная',glow:'#31e88f',g:'49,232,143',line:'#1d7048',l:'29,112,72',dim:'#6e9d85',text:'#d2f1e1',bg:'#020905',panel:'rgba(7,30,19,.78)',deep:'#031b0f',deep2:'#03140c',top:'#0b3a24',bs:'#14894f',ov:'1,8,4',bad:'#ff5c63',b:'255,92,99'},
@@ -232,7 +239,7 @@ function render(){
     const done=x.done.includes(t),on=x.days.includes(dow);
     return '<div class="item'+(done?' done':'')+(on?'':' off')+'"><button class="ck" data-act="dd" data-id="'+x.id+'"'+(done||!on?' disabled':'')+'>'+(done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br>'+WD.filter(w=>x.days.includes(w[0])).map(w=>'<span class="tag">'+w[1]+'</span>').join('')+'<span class="tag">+5 Опыт</span>'+(on?'':'<span class="tag">сегодня не по расписанию</span>')+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">Ежедневных заданий пока нет. Создайте первое выше.</div>');
   for(const sec in SEC){
-    const l=S.tasks.filter(x=>x.type==='once'&&x.sec===sec).sort((a,b)=>a.done-b.done);
+    const l=S.tasks.filter(x=>x.type==='once'&&x.sec===sec&&!x.done);
     $('#ol-'+sec).innerHTML='<span class="cap">[ '+SEC[sec]+' ]</span>'+(l.length?l.map(x=>{
       const over=!x.done&&x.due&&x.due<t;
       return '<div class="item'+(x.done?' done':'')+'"><button class="ck" data-act="od" data-id="'+x.id+'"'+(x.done?' disabled':'')+'>'+(x.done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br><span class="tag">'+rewardText(rw(x),x.missed?.5:1)+'</span>'+(x.due?'<span class="tag'+(over?' bad':'')+'">до '+x.due.split('-').reverse().join('.')+(over?' · просрочено':'')+'</span>':'')+(x.subs.map((s,i)=>'<div class="sub'+(s.d?' done':'')+'"><button data-act="sub" data-id="'+x.id+'" data-i="'+i+'">'+(s.d?'✓':'')+'</button><span>'+esc(s.t)+'</span></div>').join(''))+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">В этом разделе пока нет заданий. Добавьте первое выше.</div>');
@@ -287,7 +294,7 @@ document.addEventListener('click',e=>{
     S.tasks.push({id:uid(),type:'once',sec:b.dataset.sec,title,due:box.querySelector('.od').value||'',subs,done:false,missed:false,stats:b.dataset.sec==='quest'?[...box.querySelectorAll('.sc.on')].map(c=>c.dataset.s):[]});
     box.querySelector('.ot').value='';box.querySelector('.od').value='';box.querySelector('.osub').value='';box.querySelectorAll('.sc.on').forEach(c=>c.classList.remove('on'))}
   if(a==='dd'&&x){x.done.push(today());addXp(5);toast('Задание выполнено: +5 Опыт')}
-  if(a==='od'&&x){const r=rw(x),m=x.missed?.5:1;for(const k in r){const v=Math.floor(r[k]*m);if(!v)continue;if(k==='xp')addXp(v);else S.st[k]+=v}x.done=true;toast('Задание выполнено: '+rewardText(r,m))}
+  if(a==='od'&&x){const r=rw(x),m=x.missed?.5:1;for(const k in r){const v=Math.floor(r[k]*m);if(!v)continue;if(k==='xp')addXp(v);else S.st[k]+=v}S.archive.unshift({s:x.sec,t:x.title});if(S.archive.length>1000)S.archive.length=1000;S.tasks=S.tasks.filter(y=>y!==x);toast('Задание выполнено: '+rewardText(r,m))}
   if(a==='sub'&&x){x.subs[+b.dataset.i].d=!x.subs[+b.dataset.i].d}
   if(a==='pd'&&x){S.tasks=S.tasks.filter(y=>y!==x);toast('Штраф отработан')}
   if(a==='del'&&x)S.tasks=S.tasks.filter(y=>y!==x);
@@ -313,14 +320,26 @@ const exportText=()=>JSON.stringify({app:'level-up',version:1,exported:new Date(
 ml.onclick=e=>{
   const b=e.target.closest('[data-m]');if(!b)return;closeMenu();
   const m=b.dataset.m;
-  $('#dtitle').textContent=m==='ex'?'[ Экспорт данных ]':m==='im'?'[ Импорт данных ]':'[ Тема ]';
-  $('#dex').hidden=m!=='ex';$('#dim').hidden=m!=='im';$('#dth').hidden=m!=='th';
+  $('#dtitle').textContent=m==='ex'?'[ Экспорт данных ]':m==='im'?'[ Импорт данных ]':m==='ar'?'[ Архив ]':'[ Тема ]';
+  $('#dex').hidden=m!=='ex';$('#dim').hidden=m!=='im';$('#dth').hidden=m!=='th';$('#dar').hidden=m!=='ar';arN=20;arSure=false;
   pending=null;$('#dload').textContent='Загрузить';
   if(m==='ex')$('#dta').value=exportText();
   if(m==='im'){$('#dti').value='';$('#dfile').value=''}
   if(m==='th')drawThemes();
+  if(m==='ar')drawArchive();
   $('#data').hidden=false;
 };
+let arN=20,arSure=false;
+function drawArchive(){
+  const a=S.archive;
+  $('#arc').textContent=a.length?'Выполнено заданий: '+a.length+' (хранятся последние 1000)':'';
+  $('#arl').innerHTML=a.length?a.slice(0,arN).map(e=>'<div class="item"><div class="t"><span class="tag">'+esc(SEC[e.s]||'')+'</span> '+esc(e.t)+'</div></div>').join(''):'<div class="empty">Архив пока пуст. Сюда попадают выполненные задания из разделов.</div>';
+  $('#armore').hidden=a.length<=arN;
+  $('#arclr').hidden=!a.length;
+  $('#arclr').textContent=arSure?'Подтвердить очистку':'Очистить архив';
+}
+$('#armore').onclick=()=>{arN+=20;drawArchive()};
+$('#arclr').onclick=()=>{if(!arSure){arSure=true;drawArchive();return toast('Нажмите ещё раз, чтобы удалить архив насовсем')}S.archive=[];arSure=false;save();drawArchive()};
 function drawThemes(){
   const g=$('#tgrid');g.innerHTML='';
   Object.keys(THEMES).forEach(id=>{
@@ -345,7 +364,7 @@ $('#ddl').onclick=()=>{
 function clean(d){
   if(!d||typeof d!=='object'||!d.st||typeof d.st!=='object'||!Array.isArray(d.tasks))throw new Error('format');
   const n=v=>Math.max(0,Math.floor(+v)||0),str=(v,l)=>String(v==null?'':v).slice(0,l),dt=v=>/^\d{4}-\d\d-\d\d$/.test(v)?v:'';
-  const o={xp:n(d.xp),lv:Math.max(1,n(d.lv)),st:{},tasks:[],pool:(Array.isArray(d.pool)?d.pool:[]).filter(x=>typeof x==='string').map(x=>x.slice(0,80)),last:today(),name:typeof d.name==='string'?d.name.slice(0,24):'',theme:(typeof d.theme==='string'&&d.theme in THEMES)?d.theme:'green',lastRemind:+d.lastRemind||0};
+  const o={xp:n(d.xp),lv:Math.max(1,n(d.lv)),st:{},tasks:[],pool:(Array.isArray(d.pool)?d.pool:[]).filter(x=>typeof x==='string').map(x=>x.slice(0,80)),last:today(),name:typeof d.name==='string'?d.name.slice(0,24):'',theme:(typeof d.theme==='string'&&d.theme in THEMES)?d.theme:'green',archive:(Array.isArray(d.archive)?d.archive:[]).filter(e=>e&&typeof e.s==='string'&&e.s in SEC&&typeof e.t==='string').slice(0,1000).map(e=>({s:e.s,t:e.t.slice(0,100)})),lastRemind:+d.lastRemind||0};
   for(const k in ST)o.st[k]=n(d.st[k]);
   d.tasks.forEach(x=>{if(!x||typeof x!=='object')return;const id=str(x.id,20)||uid();
     if(x.type==='daily')o.tasks.push({id,type:'daily',title:str(x.title,80),days:(Array.isArray(x.days)?x.days:[]).map(Number).filter(v=>v>=0&&v<=6),stats:(Array.isArray(x.stats)?x.stats:[]).filter(k=>typeof k==='string'&&k in ST),done:(Array.isArray(x.done)?x.done:[]).filter(dt),created:dt(x.created)||today()});
@@ -363,7 +382,7 @@ $('#dload').onclick=()=>{
     $('#dload').textContent='Подтвердить замену';
     return toast('Код распознан. Нажмите «Подтвердить замену», текущие данные будут заменены.');
   }
-  S=pending;pending=null;applyTheme(S.theme);save();closeData();
+  S=pending;pending=null;archiveDone();applyTheme(S.theme);save();closeData();
   nm.value=S.name||'';fit();render();toast('Данные загружены. Прогресс восстановлен.');
 };
 $('#rx').onclick=()=>{remindOpen=false;render()};
