@@ -177,7 +177,7 @@ const ST={str:'Сила',agi:'Ловкость',end:'Выносливость',i
 const STG={str:'Силы',agi:'Ловкости',end:'Выносливости',int:'Интеллекта',elo:'Красноречия',per:'Восприятия'};
 const TB=v=>10+2*Math.floor(v/5);
 const ptw=n=>{const a=n%100,b=n%10;return(b===1&&a!==11)?'очко':(b>=2&&b<=4&&(a<12||a>14))?'очка':'очков'};
-const R={quest:{xp:10},work:{xp:10,elo:2,int:1,per:1},study:{xp:10,int:2,elo:1,per:1},park:{xp:10,agi:2,str:1,end:1,per:1},gym:{str:1,end:1}};
+const R={quest:{xp:10},work:{xp:10,elo:2,int:1,per:1},study:{xp:10,int:2,elo:1,per:1},park:{xp:10,agi:2,str:1,end:1,per:1},gym:{str:2,end:2}};
 const WD=[[1,'Пн'],[2,'Вт'],[3,'Ср'],[4,'Чт'],[5,'Пт'],[6,'Сб'],[0,'Вс']];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -212,7 +212,7 @@ function migrate(){
 }
 migrate();
 function recalcArchive(){
-  if(S.av===2)return;
+  if(S.av===3)return;
   const pts={};for(const k in ST)pts[k]=0;
   S.archive.forEach(e=>{const r=R[e.s];if(!r)return;for(const k in r)if(k!=='xp'&&k in pts)pts[k]+=r[k]});
   const ch=[];
@@ -224,7 +224,7 @@ function recalcArchive(){
       S.st[k]=l;S.pt[k]=b;
     }
   }
-  S.av=2;
+  S.av=3;
   if(S.archive.length)toast(ch.length?'Характеристики дополнены по архиву квестов. '+ch.join('; '):'Архив квестов учтён: характеристики не изменились.');
 }
 recalcArchive();
@@ -418,7 +418,7 @@ $('#ddl').onclick=()=>{
 function clean(d){
   if(!d||typeof d!=='object'||!d.st||typeof d.st!=='object'||!Array.isArray(d.tasks))throw new Error('format');
   const n=v=>Math.max(0,Math.floor(+v)||0),str=(v,l)=>String(v==null?'':v).slice(0,l),dt=v=>/^\d{4}-\d\d-\d\d$/.test(v)?v:'';
-  const o={xp:n(d.xp),lv:Math.max(1,n(d.lv)),st:{},pt:{},v:d.v===2?2:0,xv:d.xv===2?2:0,av:d.av===2?2:0,tasks:[],pool:(Array.isArray(d.pool)?d.pool:[]).filter(x=>typeof x==='string').map(x=>x.slice(0,80)),last:today(),name:typeof d.name==='string'?d.name.slice(0,24):'',theme:(typeof d.theme==='string'&&d.theme in THEMES)?d.theme:'green',archive:(Array.isArray(d.archive)?d.archive:[]).filter(e=>e&&typeof e.s==='string'&&e.s in SEC&&typeof e.t==='string').slice(0,1000).map(e=>({s:e.s,t:e.t.slice(0,100)})),lastRemind:+d.lastRemind||0};
+  const o={xp:n(d.xp),lv:Math.max(1,n(d.lv)),st:{},pt:{},v:d.v===2?2:0,xv:d.xv===2?2:0,av:d.av===3?3:0,tasks:[],pool:(Array.isArray(d.pool)?d.pool:[]).filter(x=>typeof x==='string').map(x=>x.slice(0,80)),last:today(),name:typeof d.name==='string'?d.name.slice(0,24):'',theme:(typeof d.theme==='string'&&d.theme in THEMES)?d.theme:'green',archive:(Array.isArray(d.archive)?d.archive:[]).filter(e=>e&&typeof e.s==='string'&&e.s in SEC&&typeof e.t==='string').slice(0,1000).map(e=>({s:e.s,t:e.t.slice(0,100)})),lastRemind:+d.lastRemind||0};
   for(const k in ST){o.st[k]=n(d.st[k]);o.pt[k]=d.v===2?n(d.pt&&d.pt[k]):0}
   d.tasks.forEach(x=>{if(!x||typeof x!=='object')return;const id=str(x.id,20)||uid();
     if(x.type==='daily')o.tasks.push({id,type:'daily',title:str(x.title,80),days:(Array.isArray(x.days)?x.days:[]).map(Number).filter(v=>v>=0&&v<=6),stats:(Array.isArray(x.stats)?x.stats:[]).filter(k=>typeof k==='string'&&k in ST),done:(Array.isArray(x.done)?x.done:[]).filter(dt),created:dt(x.created)||today()});
