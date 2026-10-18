@@ -85,6 +85,12 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
 #data[hidden]{display:none}
 #data .box{max-width:480px;width:100%;margin:0;padding-top:18px;max-height:90vh;overflow-y:auto}
 #data textarea{font-size:14px;font-family:ui-monospace,Consolas,monospace;resize:vertical}
+#edit{position:fixed;inset:0;z-index:18;background:rgba(var(--ov),.88);display:flex;align-items:center;justify-content:center;padding:16px}
+#edit[hidden]{display:none}
+#edit .box{max-width:480px;width:100%;margin:0;padding-top:18px;max-height:90vh;overflow-y:auto}
+.tl{border:0;background:none;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;overflow-wrap:anywhere}
+.tl:hover{color:var(--glow)}
+.item.done .tl{text-decoration:line-through;color:var(--dim)}
 .themes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}
 .sw{display:flex;align-items:center;gap:10px;padding:10px 12px;text-align:left}
 .sw i{width:20px;height:20px;border-radius:50%;flex:none}
@@ -129,6 +135,18 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
     <div class="row"><button id="dclose">Закрыть</button></div>
   </div>
 </div>
+<div id="edit" hidden role="dialog" aria-modal="true" aria-labelledby="etitle">
+  <div class="box"><span class="cap" id="etitle">[ Редактирование ]</span>
+    <div class="hint">Название</div>
+    <input id="et" maxlength="100">
+    <div id="ed"><div class="hint">Дни недели</div><div class="row" id="edd"></div></div>
+    <div id="eo"><div class="hint">Срок (необязательно)</div><input id="eod" type="date"></div>
+    <div id="eq"><div class="hint">Очки характеристик за этот квест (необязательно)</div><div class="row" id="eqs"></div></div>
+    <div class="hint">Подзадачи, по одной в строке</div>
+    <textarea id="es" rows="4"></textarea>
+    <div class="row"><button class="btn" id="esave">Сохранить</button><button id="ecancel">Отмена</button></div>
+  </div>
+</div>
 <div id="remind" hidden role="status">
   <div class="rh"><b>[Уведомление]</b><button id="rx" aria-label="Свернуть">✕</button></div>
   <div class="hint">Невыполненные ежедневные задания:</div>
@@ -154,6 +172,7 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
       <input id="dt" placeholder="Название задания" maxlength="80">
       <div class="hint">Дни недели</div>
       <div class="row" id="dd"></div>
+      <textarea id="dsub" rows="2" placeholder="Подзадачи, по одной в строке (необязательно)"></textarea>
       <div class="hint">Награда: +5 Опыт</div>
       <button class="btn" id="dadd">Добавить</button>
     </div>
@@ -192,6 +211,7 @@ if(!S||!S.st)S={xp:0,lv:1,st:{str:0,agi:0,per:0,int:0,elo:0,end:0},tasks:[],pool
 for(const k in ST)if(typeof S.st[k]!=='number')S.st[k]=0;
 function archiveDone(){
   if(!Array.isArray(S.archive))S.archive=[];
+  S.tasks.forEach(x=>{if(x.type==='daily'&&!Array.isArray(x.subs))x.subs=[]});
   S.tasks=S.tasks.filter(x=>{if(x.type==='once'&&x.done){S.archive.unshift({s:x.sec,t:x.title});return false}return true});
   if(S.archive.length>1000)S.archive.length=1000;
 }
@@ -291,12 +311,12 @@ function render(){
   const dl=S.tasks.filter(x=>x.type==='daily');
   $('#dl').innerHTML='<span class="cap">[ Ежедневное ]</span>'+(dl.length?dl.map(x=>{
     const done=x.done.includes(t),on=x.days.includes(dow);
-    return '<div class="item'+(done?' done':'')+(on?'':' off')+'"><button class="ck" data-act="dd" data-id="'+x.id+'"'+(done||!on?' disabled':'')+'>'+(done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br>'+WD.filter(w=>x.days.includes(w[0])).map(w=>'<span class="tag">'+w[1]+'</span>').join('')+'<span class="tag">+5 Опыт</span>'+(on?'':'<span class="tag">сегодня не по расписанию</span>')+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">Ежедневных заданий пока нет. Создайте первое выше.</div>');
+    return '<div class="item'+(done?' done':'')+(on?'':' off')+'"><button class="ck" data-act="dd" data-id="'+x.id+'"'+(done||!on?' disabled':'')+'>'+(done?'✓':'')+'</button><div class="t"><button class="tl" data-act="edit" data-id="'+x.id+'">'+esc(x.title)+'</button><br>'+WD.filter(w=>x.days.includes(w[0])).map(w=>'<span class="tag">'+w[1]+'</span>').join('')+'<span class="tag">+5 Опыт</span>'+(on?'':'<span class="tag">сегодня не по расписанию</span>')+(x.subs||[]).map((s,i)=>'<div class="sub'+(s.d===t?' done':'')+'"><button data-act="dsub" data-id="'+x.id+'" data-i="'+i+'"'+(on?'':' disabled')+'>'+(s.d===t?'✓':'')+'</button><span>'+esc(s.t)+'</span></div>').join('')+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">Ежедневных заданий пока нет. Создайте первое выше.</div>');
   for(const sec in SEC){
     const l=S.tasks.filter(x=>x.type==='once'&&x.sec===sec&&!x.done).sort((a,b)=>a.due&&b.due?(a.due<b.due?-1:a.due>b.due?1:0):a.due?-1:b.due?1:0);
     $('#ol-'+sec).innerHTML='<span class="cap">[ '+SEC[sec]+' ]</span>'+(l.length?l.map(x=>{
       const over=!x.done&&x.due&&x.due<t;
-      return '<div class="item'+(x.done?' done':'')+'"><button class="ck" data-act="od" data-id="'+x.id+'"'+(x.done?' disabled':'')+'>'+(x.done?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br><span class="tag">'+rewardText(rw(x),x.missed?.5:1)+'</span>'+(x.due?'<span class="tag'+(over?' bad':'')+'">до '+x.due.split('-').reverse().join('.')+(over?' · просрочено':'')+'</span>':'')+(x.subs.map((s,i)=>'<div class="sub'+(s.d?' done':'')+'"><button data-act="sub" data-id="'+x.id+'" data-i="'+i+'">'+(s.d?'✓':'')+'</button><span>'+esc(s.t)+'</span></div>').join(''))+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">В этом разделе пока нет заданий. Добавьте первое выше.</div>');
+      return '<div class="item'+(x.done?' done':'')+'"><button class="ck" data-act="od" data-id="'+x.id+'"'+(x.done?' disabled':'')+'>'+(x.done?'✓':'')+'</button><div class="t"><button class="tl" data-act="edit" data-id="'+x.id+'">'+esc(x.title)+'</button><br><span class="tag">'+rewardText(rw(x),x.missed?.5:1)+'</span>'+(x.due?'<span class="tag'+(over?' bad':'')+'">до '+x.due.split('-').reverse().join('.')+(over?' · просрочено':'')+'</span>':'')+(x.subs.map((s,i)=>'<div class="sub'+(s.d?' done':'')+'"><button data-act="sub" data-id="'+x.id+'" data-i="'+i+'">'+(s.d?'✓':'')+'</button><span>'+esc(s.t)+'</span></div>').join(''))+'</div><button class="x" data-act="del" data-id="'+x.id+'" aria-label="Удалить">✕</button></div>'}).join(''):'<div class="empty">В этом разделе пока нет заданий. Добавьте первое выше.</div>');
   }
   const pl=S.tasks.filter(x=>x.type==='pen');
   $('#pool').innerHTML=S.pool.length?S.pool.map((p,i)=>'<div class="item"><div class="t">'+esc(p)+'</div><button class="x" data-act="pdel" data-i="'+i+'" aria-label="Удалить">✕</button></div>').join(''):'<div class="empty">Список пуст: за пропуск будет сниматься опыт.</div>';
@@ -326,12 +346,39 @@ $('#nav').insertAdjacentHTML('beforeend','');
 const pb=document.querySelector('[data-tab=pen]');
 Object.keys(SEC).forEach(k=>pb.insertAdjacentHTML('beforebegin','<button data-tab="s-'+k+'">'+(k==='quest'?'Сюжет&shy;ные квесты':SEC[k].replace('/','/<wbr>'))+'<span class="cnt" data-c="'+k+'"></span></button>'));
 
+let editId=null;
+const closeEdit=()=>{$('#edit').hidden=true;editId=null};
+function openEdit(id){
+  const x=S.tasks.find(y=>y.id===id);if(!x||(x.type!=='daily'&&x.type!=='once'))return;
+  editId=id;const dly=x.type==='daily',q=x.type==='once'&&x.sec==='quest';
+  $('#et').value=x.title;$('#et').maxLength=dly?80:100;
+  $('#ed').hidden=!dly;$('#eo').hidden=dly;$('#eq').hidden=!q;
+  if(dly)$('#edd').innerHTML=WD.map(w=>'<button type="button" class="chip'+(x.days.includes(w[0])?' on':'')+'" data-d="'+w[0]+'">'+w[1]+'</button>').join('');
+  else{$('#eod').value=x.due||'';const lock=!!(x.missed||(x.due&&x.due<today()));$('#eod').disabled=lock}
+  if(q)$('#eqs').innerHTML=Object.keys(ST).map(k=>'<button type="button" class="chip'+((x.stats||[]).includes(k)?' on':'')+'" data-s="'+k+'">'+ST[k]+'</button>').join('');
+  $('#es').value=(x.subs||[]).map(s=>s.t).join('\n');
+  $('#edit').hidden=false;$('#et').focus();
+}
+$('#ecancel').onclick=closeEdit;
+$('#esave').onclick=()=>{
+  const x=S.tasks.find(y=>y.id===editId);if(!x)return closeEdit();
+  const title=$('#et').value.trim();if(!title)return toast('Введите название задания',1);
+  let days;
+  if(x.type==='daily'){days=[...document.querySelectorAll('#edd .on')].map(b=>+b.dataset.d);if(!days.length)return toast('Выберите хотя бы один день',1)}
+  const old=(x.subs||[]).slice();
+  x.subs=$('#es').value.split('\n').map(v=>v.trim()).filter(Boolean).slice(0,30).map(t=>{const i=old.findIndex(o=>o.t===t),k=i>=0?old.splice(i,1)[0]:null;return x.type==='daily'?{t,d:k?k.d:''}:{t,d:k?!!k.d:false}});
+  x.title=title;
+  if(x.type==='daily')x.days=days;
+  else{if(!$('#eod').disabled)x.due=$('#eod').value||'';if(x.sec==='quest')x.stats=[...document.querySelectorAll('#eqs .on')].map(b=>b.dataset.s)}
+  closeEdit();render();toast('Изменения сохранены');
+};
 $('#dadd').onclick=()=>{
   const title=$('#dt').value.trim();if(!title)return toast('Введите название задания',1);
   const days=[...document.querySelectorAll('#dd .on')].map(b=>+b.dataset.d);
   if(!days.length)return toast('Выберите хотя бы один день',1);
-  S.tasks.push({id:uid(),type:'daily',title,days,stats:[],done:[],created:today()});
-  $('#dt').value='';render();
+  const subs=$('#dsub').value.split('\n').map(v=>v.trim()).filter(Boolean).slice(0,30).map(t=>({t,d:''}));
+  S.tasks.push({id:uid(),type:'daily',title,days,stats:[],subs,done:[],created:today()});
+  $('#dt').value='';$('#dsub').value='';render();
 };
 $('#pdone').onchange=e=>{$('#pok').disabled=!e.target.checked};
 $('#pok').onclick=()=>{const id=$('#modal').dataset.id;if(!$('#pdone').checked)return;S.tasks=S.tasks.filter(y=>y.id!==id);toast('Штраф отработан. Доступ к системе открыт');render()};
@@ -343,6 +390,8 @@ document.addEventListener('click',e=>{
   if(tb){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b===tb));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.id==='tab-'+tb.dataset.tab));return}
   const b=e.target.closest('[data-act]');if(!b)return;
   const a=b.dataset.act,x=S.tasks.find(y=>y.id===b.dataset.id);
+  if(a==='edit'){openEdit(b.dataset.id);return}
+  if(a==='dsub'&&x&&x.subs&&x.subs[+b.dataset.i]){const q=x.subs[+b.dataset.i];q.d=q.d===today()?'':today()}
   if(a==='oadd'){const box=b.closest('.tab'),title=box.querySelector('.ot').value.trim();if(!title)return toast('Введите название задания',1);
     const subs=box.querySelector('.osub').value.split('\n').map(v=>v.trim()).filter(Boolean).map(t=>({t,d:false}));
     S.tasks.push({id:uid(),type:'once',sec:b.dataset.sec,title,due:box.querySelector('.od').value||'',subs,done:false,missed:false,stats:b.dataset.sec==='quest'?[...box.querySelectorAll('.sc.on')].map(c=>c.dataset.s):[]});
@@ -369,7 +418,7 @@ mb.onclick=e=>{e.stopPropagation();ml.hidden=!ml.hidden;mb.setAttribute('aria-ex
 document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenu()});
 const closeData=()=>{$('#data').hidden=true;pending=null;$('#dload').textContent='Загрузить'};
 $('#dclose').onclick=closeData;
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();if(!$('#data').hidden)closeData()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();if(!$('#data').hidden)closeData();if(!$('#edit').hidden)closeEdit()}});
 const exportText=()=>JSON.stringify({app:'level-up',version:1,exported:new Date().toISOString(),data:S});
 ml.onclick=e=>{
   const b=e.target.closest('[data-m]');if(!b)return;closeMenu();
@@ -421,7 +470,7 @@ function clean(d){
   const o={xp:n(d.xp),lv:Math.max(1,n(d.lv)),st:{},pt:{},v:d.v===2?2:0,xv:d.xv===2?2:0,av:d.av===3?3:0,tasks:[],pool:(Array.isArray(d.pool)?d.pool:[]).filter(x=>typeof x==='string').map(x=>x.slice(0,80)),last:today(),name:typeof d.name==='string'?d.name.slice(0,24):'',theme:(typeof d.theme==='string'&&d.theme in THEMES)?d.theme:'green',archive:(Array.isArray(d.archive)?d.archive:[]).filter(e=>e&&typeof e.s==='string'&&e.s in SEC&&typeof e.t==='string').slice(0,1000).map(e=>({s:e.s,t:e.t.slice(0,100)})),lastRemind:+d.lastRemind||0};
   for(const k in ST){o.st[k]=n(d.st[k]);o.pt[k]=d.v===2?n(d.pt&&d.pt[k]):0}
   d.tasks.forEach(x=>{if(!x||typeof x!=='object')return;const id=str(x.id,20)||uid();
-    if(x.type==='daily')o.tasks.push({id,type:'daily',title:str(x.title,80),days:(Array.isArray(x.days)?x.days:[]).map(Number).filter(v=>v>=0&&v<=6),stats:(Array.isArray(x.stats)?x.stats:[]).filter(k=>typeof k==='string'&&k in ST),done:(Array.isArray(x.done)?x.done:[]).filter(dt),created:dt(x.created)||today()});
+    if(x.type==='daily')o.tasks.push({id,type:'daily',title:str(x.title,80),days:(Array.isArray(x.days)?x.days:[]).map(Number).filter(v=>v>=0&&v<=6),stats:(Array.isArray(x.stats)?x.stats:[]).filter(k=>typeof k==='string'&&k in ST),subs:(Array.isArray(x.subs)?x.subs:[]).slice(0,30).map(q=>({t:str(q&&q.t,100),d:dt(q&&q.d)})),done:(Array.isArray(x.done)?x.done:[]).filter(dt),created:dt(x.created)||today()});
     else if(x.type==='once'&&typeof x.sec==='string'&&x.sec in SEC)o.tasks.push({id,type:'once',sec:x.sec,title:str(x.title,100),due:dt(x.due),subs:(Array.isArray(x.subs)?x.subs:[]).map(q=>({t:str(q&&q.t,100),d:!!(q&&q.d)})),done:!!x.done,missed:!!x.missed,stats:(x.sec==='quest'&&Array.isArray(x.stats))?x.stats.filter(k=>typeof k==='string'&&k in ST):[]});
     else if(x.type==='pen')o.tasks.push({id,type:'pen',title:str(x.title,80),why:str(x.why,10),src:str(x.src,200),n:n(x.n)||1});
   });
