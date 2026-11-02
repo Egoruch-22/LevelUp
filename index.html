@@ -91,6 +91,9 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
 .tl{border:0;background:none;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;overflow-wrap:anywhere}
 .tl:hover{color:var(--glow)}
 .item.done .tl{text-decoration:line-through;color:var(--dim)}
+#review{position:fixed;inset:0;z-index:19;background:rgba(var(--ov),.92);display:flex;align-items:center;justify-content:center;padding:16px}
+#review[hidden]{display:none}
+#review .box{max-width:480px;width:100%;margin:0;padding-top:18px;max-height:90vh;overflow-y:auto}
 .themes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}
 .sw{display:flex;align-items:center;gap:10px;padding:10px 12px;text-align:left}
 .sw i{width:20px;height:20px;border-radius:50%;flex:none}
@@ -133,6 +136,13 @@ input,select,textarea{width:100%;background:var(--deep2);border:1px solid var(--
       <div class="row"><button class="btn" id="dload">Загрузить</button></div>
     </div>
     <div class="row"><button id="dclose">Закрыть</button></div>
+  </div>
+</div>
+<div id="review" hidden role="dialog" aria-modal="true" aria-labelledby="rvt">
+  <div class="box"><span class="cap" id="rvt">[ Итоги дня ]</span>
+    <div class="hint">Отметьте задания, которые вы выполнили, но не успели внести. Всё неотмеченное будет считаться проваленным.</div>
+    <div id="rvl"></div>
+    <div class="row"><button class="btn" id="rvok">Закрыть</button></div>
   </div>
 </div>
 <div id="edit" hidden role="dialog" aria-modal="true" aria-labelledby="etitle">
@@ -205,7 +215,7 @@ const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const today=()=>ds(new Date());
 const need=l=>100+20*(l-1);
 const uid=()=>Math.random().toString(36).slice(2,9);
-let S,remindOpen=false;
+let S,remindOpen=false,rv=null;
 try{S=JSON.parse(localStorage.getItem('sistema-v1'))}catch(e){}
 if(!S||!S.st)S={xp:0,lv:1,st:{str:0,agi:0,per:0,int:0,elo:0,end:0},tasks:[],pool:[],last:today()};
 for(const k in ST)if(typeof S.st[k]!=='number')S.st[k]=0;
@@ -289,15 +299,38 @@ function penalty(why,src,n){if(!S.pool.length)return null;const t=S.pool[Math.fl
 const rw=x=>{const r={...R[x.sec]};if(x.sec==='quest')(x.stats||[]).forEach(k=>{if(k in ST)r[k]=(r[k]||0)+1});return r};
 function rewardText(sec,m){const r=typeof sec==='string'?R[sec]:sec,o=[];for(const k in r){const v=Math.floor(r[k]*(m||1));if(v>0)o.push('+'+v+' '+(k==='xp'?'Опыт':ptw(v)+' '+STG[k]))}return o.join(', ')||'без награды'}
 
-function check(){
-  const t=today();let d=new Date(S.last+'T00:00:00');let lost=0,pens=0;
+function collectMisses(){
+  const t=today(),d=new Date(S.last+'T00:00:00'),daily=[],once=[];
   while(ds(d)<t){const k=ds(d);
-    const miss=S.tasks.filter(x=>x.type==='daily'&&x.days.includes(d.getDay())&&k>=x.created&&!x.done.includes(k));
-    miss.forEach(()=>{const l=Math.min(S.xp,5);S.xp-=l;lost+=l});
-    if(miss.length&&penalty('daily',miss.map(x=>x.title).join('», «'),miss.length))pens++;
+    S.tasks.filter(x=>x.type==='daily'&&x.days.includes(d.getDay())&&k>=x.created&&!x.done.includes(k)).forEach(x=>daily.push({date:k,id:x.id}));
     d.setDate(d.getDate()+1)}
-  S.last=t;
-  S.tasks.filter(x=>x.type==='once'&&!x.done&&x.due&&x.due<t&&!x.missed).forEach(x=>{x.missed=true;if(penalty('once',x.title))pens++;toast('Срок задания «'+x.title+'» истёк. Награда уменьшена.',1)});
+  S.tasks.filter(x=>x.type==='once'&&!x.done&&x.due&&x.due<t&&!x.missed).forEach(x=>once.push({date:x.due,id:x.id}));
+  return {daily,once,until:t};
+}
+function check(){
+  if(rv)return;
+  const m=collectMisses();
+  if(!m.daily.length&&!m.once.length){S.last=m.until;save();return}
+  rv={m,items:[...m.daily.map(e=>({k:'d',date:e.date,id:e.id,on:false})),...m.once.map(e=>({k:'o',date:e.date,id:e.id,on:false}))]};
+}
+function finishOnce(x,m,quiet){
+  const r=rw(x);
+  for(const k in r){const v=Math.floor(r[k]*m);if(!v)continue;if(k==='xp')addXp(v);else addPts(k,v)}
+  S.archive.unshift({s:x.sec,t:x.title});if(S.archive.length>1000)S.archive.length=1000;
+  S.tasks=S.tasks.filter(y=>y!==x);
+  if(!quiet)toast('Задание выполнено: '+rewardText(r,m));
+}
+function applyReview(){
+  const m=rv.m,on=new Set(rv.items.filter(i=>i.on).map(i=>i.k+':'+i.date+':'+i.id));
+  let lost=0,pens=0,ok=0;
+  m.daily.forEach(e=>{if(!on.has('d:'+e.date+':'+e.id))return;const x=S.tasks.find(y=>y.id===e.id);if(!x)return;if(!x.done.includes(e.date))x.done.push(e.date);addXp(5);ok++});
+  m.once.forEach(e=>{if(!on.has('o:'+e.date+':'+e.id))return;const x=S.tasks.find(y=>y.id===e.id);if(!x)return;finishOnce(x,1,true);ok++});
+  const byDate={};
+  m.daily.forEach(e=>{if(on.has('d:'+e.date+':'+e.id))return;const x=S.tasks.find(y=>y.id===e.id);if(!x)return;(byDate[e.date]=byDate[e.date]||[]).push(x)});
+  Object.keys(byDate).sort().forEach(k=>{const a=byDate[k];a.forEach(()=>{const l=Math.min(S.xp,5);S.xp-=l;lost+=l});if(penalty('daily',a.map(x=>x.title).join('», «'),a.length))pens++});
+  m.once.forEach(e=>{if(on.has('o:'+e.date+':'+e.id))return;const x=S.tasks.find(y=>y.id===e.id);if(!x)return;x.missed=true;if(penalty('once',x.title))pens++;toast('Срок задания «'+x.title+'» истёк. Награда уменьшена.',1)});
+  S.last=m.until;rv=null;
+  if(ok)toast('Засчитано заданий: '+ok);
   if(lost)toast('Пропущены ежедневные задания. Потеряно опыта: '+lost,1);
   if(pens)toast('Назначено штрафных заданий: '+pens,1);
   save();
@@ -333,9 +366,18 @@ function render(){
   for(const k in SEC)cnt(k,S.tasks.filter(x=>x.type==='once'&&x.sec===k&&!x.done).length);
   const und=dl.filter(x=>x.days.includes(dow)&&!x.done.includes(t));
   if(!und.length)remindOpen=false;
-  $('#remind').hidden=!(remindOpen&&!cur);
+  $('#remind').hidden=!(remindOpen&&!cur&&!rv);
   $('#rl').innerHTML=und.map(x=>'<div class="item"><div class="t">'+esc(x.title)+'</div><button class="btn" data-act="dd" data-id="'+x.id+'">Выполнено</button></div>').join('');
-  document.querySelector('main').inert=!!cur;
+  if(rv){
+    let h='',lastD='';
+    rv.items.map((it,i)=>({it,i})).sort((a,b)=>a.it.date<b.it.date?-1:a.it.date>b.it.date?1:a.i-b.i).forEach(({it,i})=>{
+      const x=S.tasks.find(y=>y.id===it.id);if(!x)return;
+      if(it.date!==lastD){lastD=it.date;h+='<div class="hint">'+it.date.split('-').reverse().join('.')+'</div>'}
+      h+='<div class="item'+(it.on?' done':'')+'"><button class="ck" data-act="rv" data-i="'+i+'" aria-pressed="'+it.on+'">'+(it.on?'✓':'')+'</button><div class="t">'+esc(x.title)+'<br><span class="tag">'+(it.k==='d'?'Ежедневное · +5 Опыт':SEC[x.sec]+' · '+rewardText(rw(x),1))+'</span></div></div>'});
+    $('#rvl').innerHTML=h;
+  }
+  $('#review').hidden=!rv;
+  document.querySelector('main').inert=!!(cur||rv);
   save();
 }
 
@@ -360,6 +402,7 @@ function openEdit(id){
   $('#edit').hidden=false;$('#et').focus();
 }
 $('#ecancel').onclick=closeEdit;
+$('#rvok').onclick=()=>{if(rv){applyReview();render()}};
 $('#esave').onclick=()=>{
   const x=S.tasks.find(y=>y.id===editId);if(!x)return closeEdit();
   const title=$('#et').value.trim();if(!title)return toast('Введите название задания',1);
@@ -391,13 +434,14 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;
   const a=b.dataset.act,x=S.tasks.find(y=>y.id===b.dataset.id);
   if(a==='edit'){openEdit(b.dataset.id);return}
+  if(a==='rv'){const it=rv&&rv.items[+b.dataset.i];if(it)it.on=!it.on}
   if(a==='dsub'&&x&&x.subs&&x.subs[+b.dataset.i]){const q=x.subs[+b.dataset.i];q.d=q.d===today()?'':today()}
   if(a==='oadd'){const box=b.closest('.tab'),title=box.querySelector('.ot').value.trim();if(!title)return toast('Введите название задания',1);
     const subs=box.querySelector('.osub').value.split('\n').map(v=>v.trim()).filter(Boolean).map(t=>({t,d:false}));
     S.tasks.push({id:uid(),type:'once',sec:b.dataset.sec,title,due:box.querySelector('.od').value||'',subs,done:false,missed:false,stats:b.dataset.sec==='quest'?[...box.querySelectorAll('.sc.on')].map(c=>c.dataset.s):[]});
     box.querySelector('.ot').value='';box.querySelector('.od').value='';box.querySelector('.osub').value='';box.querySelectorAll('.sc.on').forEach(c=>c.classList.remove('on'))}
   if(a==='dd'&&x){x.done.push(today());addXp(5);toast('Задание выполнено: +5 Опыт')}
-  if(a==='od'&&x){const r=rw(x),m=x.missed?.5:1;for(const k in r){const v=Math.floor(r[k]*m);if(!v)continue;if(k==='xp')addXp(v);else addPts(k,v)}S.archive.unshift({s:x.sec,t:x.title});if(S.archive.length>1000)S.archive.length=1000;S.tasks=S.tasks.filter(y=>y!==x);toast('Задание выполнено: '+rewardText(r,m))}
+  if(a==='od'&&x)finishOnce(x,x.missed?.5:1);
   if(a==='sub'&&x){x.subs[+b.dataset.i].d=!x.subs[+b.dataset.i].d}
   if(a==='pd'&&x){S.tasks=S.tasks.filter(y=>y!==x);toast('Штраф отработан')}
   if(a==='del'&&x)S.tasks=S.tasks.filter(y=>y!==x);
@@ -491,6 +535,7 @@ $('#dload').onclick=()=>{
 $('#rx').onclick=()=>{remindOpen=false;render()};
 function tick(){
   if(S.last<today()){check();render()}
+  if(rv)return;
   if(S.tasks.some(x=>x.type==='pen'))return;
   const t=today(),dow=new Date().getDay();
   if(!S.tasks.some(x=>x.type==='daily'&&x.days.includes(dow)&&!x.done.includes(t)))return;
